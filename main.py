@@ -10,6 +10,15 @@ def merge_csvs(recieving: pd.DataFrame, adp: pd.DataFrame):
     merged.to_csv("merged.csv", index=False)
 
 
+def merge_finish(merged: pd.DataFrame, finish: pd.DataFrame):
+    merged = merged.merge(
+        finish["fantasyPts", "ptsPerSnapptsPerTouch"],
+        on=["player", "team_name", "position"],
+        how="left",
+    )
+    merged.to_csv("merged_points.csv", index=False)
+
+
 def main():
     recieving = pd.read_csv("pff_recieving/receiving_summary_2024.csv")
     adp = pd.read_csv("preseason_adp/2025ADP.csv")
