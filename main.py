@@ -1,12 +1,40 @@
+from operator import index
+from pathlib import Path
+
 import pandas as pd
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 import numpy as np
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import add_dummy_feature
 
 
-def merge_csvs(recieving: pd.DataFrame, adp: pd.DataFrame, finish: pd.DataFrame):
-    merged = pd.merge(recieving, adp, on=["player", "position"], how="inner")
+def merge_csvs():
+    # recieving = pd.read_csv("pff_recieving/receiving_summary_2024.csv")
+    adp = pd.read_csv("preseason_adp/2025ADP.csv")
+    finish = pd.read_csv("points_finish/receiving_finish_2025.csv")
+    pff_path = Path("pff_recieving")
+    adp_path = Path("pff_recieving")
+    finish_path = Path("pff_recieving")
+    pff_dfs = []
+    adp_dfs = []
+    finish_dfs = []
+
+    for file_path in pff_path.iterdir():
+        pff_dfs.append(pd.read_csv(file_path))
+    for file_path in adp_path.iterdir():
+        adp_dfs.append(pd.read_csv(file_path))
+    for file_path in finish_path.iterdir():
+        finish_dfs.append(pd.read_csv(file_path))
+    clean_data(pff_dfs + adp_dfs + finish_dfs)
+    recieving = pd.concat([pff_df for pff_df in pff_dfs], ignore_index=True)
+    merged = pd.merge(
+        recieving,
+        adp,
+        on=["player", "position"],
+        how="inner",
+    )
     merged = merged.drop(columns=["Notes", "Id"])
     merged = merged.merge(
         finish[
@@ -32,12 +60,11 @@ def clean_data(dataframes: list[pd.DataFrame]):
         df.drop(index=non_wr_rows, inplace=True)
 
 
-def check_data(
-    recieving: pd.DataFrame,
-    adp: pd.DataFrame,
-    finish: pd.DataFrame,
-    merged: pd.DataFrame,
-):
+def check_data():
+    recieving = pd.read_csv("pff_recieving/receiving_summary_2024.csv")
+    adp = pd.read_csv("preseason_adp/2025ADP.csv")
+    finish = pd.read_csv("points_finish/receiving_finish_2025.csv")
+    merged = pd.read_csv("merged.csv")
     seen_pff = set()
     seen_underdog = set()
     dups = []
@@ -53,26 +80,32 @@ def check_data(
     print(dups)
 
 
-def numpy_linreg(X_b, y):
-    theta = np.linalg.inv(X_b.T @ X_b) @ X_b.T @ y
+def numpy_linreg(
+    X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
+):
+    X_train = add_dummy_feature(X_train)
+    X_test = add_dummy_feature(X_test)
+    theta = np.linalg.inv(X_train.T @ X_train) @ X_train.T @ y_train
     mse = 0
-    for i in range(len(X_b)):
-        mse += (theta.T @ X_b[i] - y[i]) ** 2
-    mse /= len(X_b)
+    for i in range(len(X_test)):
+        mse += (theta.T @ X_test[i] - y_test[i]) ** 2
+    mse /= len(X_test)
     rmse = np.sqrt(mse)
     print(rmse)
 
 
-def sklearn_linreg(X, y):
+def sklearn_linreg(
+    X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
+):
     lin_reg = LinearRegression()
-    lin_reg.fit(X, y)
+    lin_reg.fit(X_train, y_train)
+    y_pred = lin_reg.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    print(rmse)
 
 
 def main():
-    # recieving = pd.read_csv("pff_recieving/receiving_summary_2024.csv")
-    # adp = pd.read_csv("preseason_adp/2025ADP.csv")
-    # finish = pd.read_csv("points_finish/receiving_finish_2025.csv")
-    # clean_data([recieving, adp, finish])
     # merge_csvs(recieving, adp, finish)
     merged = pd.read_csv("merged.csv")
     nan_cols = merged.columns[merged.isna().any()]
@@ -89,12 +122,15 @@ def main():
     X_df = merged.drop(columns=exclude)
     X_df = X_df.select_dtypes(include="number")
     features = X_df.columns.to_list()
+    features = [
+        "ADP",
+    ]
     X = merged[features].to_numpy().reshape(-1, len(features))
-    X_b = add_dummy_feature(X)
     y = merged["fantasyPts"].to_numpy().reshape(-1, 1)
-    print(y)
-    numpy_linreg(X_b, y)
-    # sklearn_linreg(X, y)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    sklearn_linreg(X_train, X_test, y_train, y_test)
     # plt.plot(X, y, "b.")
     # plt.show()
 
