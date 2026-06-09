@@ -28,7 +28,8 @@ def merge_csvs():
     for file_path in finish_path.iterdir():
         finish_dfs.append(pd.read_csv(file_path))
     clean_data(pff_dfs + adp_dfs + finish_dfs)
-    recieving = pd.concat([pff_df for pff_df in pff_dfs], ignore_index=True)
+    recieving = pd.concat(pff_dfs, ignore_index=True)
+    # dont return here
     merged = pd.merge(
         recieving,
         adp,
