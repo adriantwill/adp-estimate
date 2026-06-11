@@ -1,5 +1,5 @@
-from operator import index
 from pathlib import Path
+import re
 
 import pandas as pd
 from sklearn.metrics import mean_squared_error
@@ -11,29 +11,36 @@ from sklearn.preprocessing import add_dummy_feature
 
 
 def merge_csvs():
-    # recieving = pd.read_csv("pff_recieving/receiving_summary_2024.csv")
-    adp = pd.read_csv("preseason_adp/2025ADP.csv")
-    finish = pd.read_csv("points_finish/receiving_finish_2025.csv")
     pff_path = Path("pff_recieving")
-    adp_path = Path("pff_recieving")
-    finish_path = Path("pff_recieving")
+    adp_path = Path("adp_path")
+    finish_path = Path("points_finish")
     pff_dfs = []
     adp_dfs = []
     finish_dfs = []
 
     for file_path in pff_path.iterdir():
-        pff_dfs.append(pd.read_csv(file_path))
+        df = pd.read_csv(file_path)
+        year = re.search(r"\d{4}", file_path.name).group()
+        df["year"] = int(year)
+        pff_dfs.append(df)
     for file_path in adp_path.iterdir():
-        adp_dfs.append(pd.read_csv(file_path))
+        df = pd.read_csv(file_path)
+        year = re.search(r"\d{4}", file_path.name).group()
+        df["year"] = int(year)
+        adp_dfs.append(df)
     for file_path in finish_path.iterdir():
-        finish_dfs.append(pd.read_csv(file_path))
+        df = pd.read_csv(file_path)
+        year = re.search(r"\d{4}", file_path.name).group()
+        df["year"] = int(year)
+        finish_dfs.append(df)
     clean_data(pff_dfs + adp_dfs + finish_dfs)
     recieving = pd.concat(pff_dfs, ignore_index=True)
-    # dont return here
+    adp = pd.concat(adp_dfs, ignore_index=True)
+    finish = pd.concat(finish_dfs, ignore_index=True)
     merged = pd.merge(
         recieving,
         adp,
-        on=["player", "position"],
+        on=["player", "position", "year"],
         how="inner",
     )
     merged = merged.drop(columns=["Notes", "Id"])
@@ -42,15 +49,16 @@ def merge_csvs():
             [
                 "player",
                 "position",
+                "year",
                 "fantasyPts",
                 "ptsPerSnap",
                 "ptsPerTouch",
             ]
         ],
-        on=["player", "position"],
+        on=["player", "position", "year"],
         how="inner",
     )
-    merged.to_csv("merged.csv", index=False)
+    merged.to_csv("merged_new.csv", index=False)
 
 
 def clean_data(dataframes: list[pd.DataFrame]):
