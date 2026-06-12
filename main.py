@@ -12,23 +12,34 @@ from sklearn.preprocessing import add_dummy_feature
 
 def merge_csvs():
     pff_path = Path("pff_recieving")
-    adp_path = Path("adp_path")
+    adp_path = Path("preseason_adp")
     finish_path = Path("points_finish")
     pff_dfs = []
     adp_dfs = []
     finish_dfs = []
 
     for file_path in pff_path.iterdir():
+        if file_path.suffix != ".csv":
+            continue
         df = pd.read_csv(file_path)
         year = re.search(r"\d{4}", file_path.name).group()
         df["year"] = int(year)
         pff_dfs.append(df)
     for file_path in adp_path.iterdir():
+        print(file_path)
+        if file_path.suffix != ".csv":
+            continue
         df = pd.read_csv(file_path)
         year = re.search(r"\d{4}", file_path.name).group()
         df["year"] = int(year)
+        df = df.rename(columns={"Pos": "position"})
+        df = df.rename(columns={"Player": "player"})
+        df = df.rename(columns={"Name": "player"})
+        # chaange
         adp_dfs.append(df)
     for file_path in finish_path.iterdir():
+        if file_path.suffix != ".csv":
+            continue
         df = pd.read_csv(file_path)
         year = re.search(r"\d{4}", file_path.name).group()
         df["year"] = int(year)
@@ -58,11 +69,13 @@ def merge_csvs():
         on=["player", "position", "year"],
         how="inner",
     )
+    print("compelte merge")
     merged.to_csv("merged_new.csv", index=False)
 
 
 def clean_data(dataframes: list[pd.DataFrame]):
     for df in dataframes:
+        print(df)
         df["player"] = df["player"].str.replace(" Jr.", "", regex=False)
         df["player"] = df["player"].str.replace(".", "", regex=False)
         non_wr_rows = df.index[df["position"] != "WR"]
@@ -114,9 +127,7 @@ def sklearn_linreg(
     print(rmse)
 
 
-def main():
-    # merge_csvs(recieving, adp, finish)
-    merged = pd.read_csv("merged.csv")
+def prepare_data(merged: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     nan_cols = merged.columns[merged.isna().any()]
     print(nan_cols.tolist())
     exclude = [
@@ -136,10 +147,17 @@ def main():
     ]
     X = merged[features].to_numpy().reshape(-1, len(features))
     y = merged["fantasyPts"].to_numpy().reshape(-1, 1)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-    sklearn_linreg(X_train, X_test, y_train, y_test)
+    return X, y
+
+
+def main():
+    merge_csvs()
+    # merged = pd.read_csv("merged.csv")
+    # X, y = prepare_data(merged)
+    # X_train, X_test, y_train, y_test = train_test_split(
+    #     X, y, test_size=0.2, random_state=42
+    # )
+    # sklearn_linreg(X_train, X_test, y_train, y_test)
     # plt.plot(X, y, "b.")
     # plt.show()
 
