@@ -1,13 +1,26 @@
 from pathlib import Path
 import re
-
 import pandas as pd
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 import numpy as np
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import add_dummy_feature
+
+
+def merge_once():
+    path = Path("preseason_adp")
+    for file_path in path.iterdir():
+        if (
+            str(file_path) != "preseason_adp/ADP2020.csv"
+            or str(file_path) != "preseason_adp/ADP2021.csv"
+        ):
+            continue
+        df = pd.read_csv(file_path)
+        dups = df[df["Player"].duplicated(keep=False)]
+        print(file_path)
+        print(dups)
 
 
 def merge_csvs():
@@ -97,12 +110,12 @@ def merge_avg_player(df: pd.DataFrame):
         "franchise_id",
         "year",
     ]
-    cols = [
+    cols = (
         df.drop(columns=exclude, errors="ignore")
         .select_dtypes(include="number")
         .dropna(axis=1)
         .columns.tolist()
-    ]
+    )
     for col in cols:
         curr = df.groupby("player")[col].shift(0)
         prev1 = df.groupby("player")[col].shift(1)
@@ -157,7 +170,7 @@ def numpy_linreg(
 def sklearn_linreg(
     X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
 ):
-    lin_reg = LinearRegression()
+    lin_reg = Ridge(alpha=10)
     lin_reg.fit(X_train, y_train)
     y_pred = lin_reg.predict(X_test)
     mse = mean_squared_error(y_test, y_pred)
@@ -175,6 +188,7 @@ def prepare_data(
         "ptsPerSnap",
         "ptsPerTouch",
         "franchise_id",
+        "year",
     ]
     exclude.extend(
         merged.columns[merged.isna().any()].to_list()
@@ -193,10 +207,11 @@ def prepare_data(
 
 def main():
     # merge_csvs()
-    merged = pd.read_csv("average.csv")
-    # merge_avg_player(pd.read_csv("merged_new.csv"))
-    X_train, X_test, y_train, y_test = prepare_data(merged)
-    sklearn_linreg(X_train, X_test, y_train, y_test)
+    merge_once()
+    # merged = pd.read_csv("average.csv")
+    # # merge_avg_player(pd.read_csv("merged_new.csv"))
+    # X_train, X_test, y_train, y_test = prepare_data(merged)
+    # sklearn_linreg(X_train, X_test, y_train, y_test)
     # plt.plot(X, y, "b.")
     # plt.show()
 
