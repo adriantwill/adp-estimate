@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+from numpy.random import rand
 import pandas as pd
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
@@ -7,20 +8,6 @@ import numpy as np
 from sklearn.linear_model import LinearRegression, Ridge
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import add_dummy_feature
-
-
-def merge_once():
-    path = Path("preseason_adp")
-    for file_path in path.iterdir():
-        if (
-            str(file_path) != "preseason_adp/ADP2020.csv"
-            or str(file_path) != "preseason_adp/ADP2021.csv"
-        ):
-            continue
-        df = pd.read_csv(file_path)
-        dups = df[df["Player"].duplicated(keep=False)]
-        print(file_path)
-        print(dups)
 
 
 def merge_csvs():
@@ -167,6 +154,14 @@ def numpy_linreg(
     print(rmse)
 
 
+def linreg_gd(
+    X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
+):
+    X_train = add_dummy_feature(X_train)
+    X_test = add_dummy_feature(X_test)
+    thetas = [np.random.rand(0, 100), np.random.rand(0, 100)]
+
+
 def sklearn_linreg(
     X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
 ):
@@ -206,8 +201,16 @@ def prepare_data(
 
 
 def main():
+    X = pd.read_csv("pros_bb_adp/FantasyPros_2024_Overall_ADP_Rankings.csv")
+    y = pd.read_csv("points_finish/receiving_finish_2025.csv")
+    X = X["AVG"]
+    y = y["fantasyPts"]
+    print(X.head())
+    print(y.head())
+    return
+    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+    linreg_gd(X_train, X_test, y_train, y_test)
     # merge_csvs()
-    merge_once()
     # merged = pd.read_csv("average.csv")
     # # merge_avg_player(pd.read_csv("merged_new.csv"))
     # X_train, X_test, y_train, y_test = prepare_data(merged)
