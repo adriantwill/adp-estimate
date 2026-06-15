@@ -10,44 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import add_dummy_feature
 
 
-def temp():
-    bb_adp = []
-    for file_path in Path("pros_bb_adp").iterdir():
-        if file_path.suffix != ".csv":
-            continue
-        df = pd.read_csv(file_path)
-        year = re.search(r"\d{4}", file_path.name).group()
-        df["year"] = int(year)
-        df = df[["year", "Player", "AVG"]]
-        df = df.rename(columns={"Player": "player"})
-        df = df.rename(columns={"AVG": "avg_bb"})
-        bb_adp.append(df)
-    clean_data(bb_adp)
-    bb_adp = pd.concat(bb_adp, ignore_index=True)
-    players = pd.read_csv("merged_new.csv")
-    players["adp_year"] = players["year"] + 1
-    merged = pd.merge(
-        players,
-        bb_adp,
-        left_on=["player", "adp_year"],
-        right_on=["player", "year"],
-        how="inner",
-        suffixes=("", "_bb"),
-    )
-    merged = merged.drop(columns=["year_bb"])
-    merged = pd.merge(
-        merged,
-        adp,
-        left_on=["player", "adp_year"],
-        right_on=["player", "year"],
-        how="inner",
-        suffixes=("", "_adp"),
-    )
-    merged = merged.drop(columns=["year_adp"])
-    merged.to_csv("merged_new_test.csv", index=False)
-
-
-def csv_df_list(path: Path):
+def csv_df_list(path: Path) -> list:
     dfs = []
     for file_path in path.iterdir():
         if file_path.suffix != ".csv":
@@ -55,59 +18,39 @@ def csv_df_list(path: Path):
         df = pd.read_csv(file_path)
         year = re.search(r"\d{4}", file_path.name).group()
         df["year"] = int(year)
-        max_targets = df["targets"].max()
-        df = df[df["targets"] >= max_targets * 0.1]
-        pff_dfs.append(df)
+        print(str(path))
+        match str(path):
+            case "pff_recieving":
+                max_targets = df["targets"].max()
+                df = df[df["targets"] >= max_targets * 0.1]
+            case "pros_bb_adp":
+                df = df[["year", "Player", "AVG", "POS"]]
+                df = df.rename(columns={"POS": "position"})
+                df["position"] = df["position"].str.replace(r"\d+", "", regex=True)
+                df = df.rename(columns={"Player": "player"})
+                df["year"] = int(year) - 1
+            case "points_finish":
+                df["year"] = int(year) - 1
+        dfs.append(df)
+    return dfs
 
 
 def merge_csvs():
-    pff_path = Path("pff_recieving")
-    adp_path = Path("preseason_adp")
-    finish_path = Path("points_finish")
-    pff_dfs = []
-    adp_dfs = []
-    finish_dfs = []
-
-    for file_path in pff_path.iterdir():
-        if file_path.suffix != ".csv":
-            continue
-        df = pd.read_csv(file_path)
-        year = re.search(r"\d{4}", file_path.name).group()
-        df["year"] = int(year)
-        max_targets = df["targets"].max()
-        df = df[df["targets"] >= max_targets * 0.1]
-        pff_dfs.append(df)
-    for file_path in adp_path.iterdir():
-        if file_path.suffix != ".csv":
-            continue
-        df = pd.read_csv(file_path)
-        year = re.search(r"\d{4}", file_path.name).group()
-        df["year"] = int(year)
-        df = df.rename(columns={"Pos": "position"})
-        df = df.rename(columns={"Player": "player"})
-        df = df.rename(columns={"Name": "player"})
-        # chaange
-        adp_dfs.append(df)
-    for file_path in finish_path.iterdir():
-        if file_path.suffix != ".csv":
-            continue
-        df = pd.read_csv(file_path)
-        year = re.search(r"\d{4}", file_path.name).group()
-        df["year"] = int(year) - 1
-        finish_dfs.append(df)
+    pff_dfs = csv_df_list(Path("pff_recieving"))
+    adp_dfs = csv_df_list(Path("pros_bb_adp"))
+    finish_dfs = csv_df_list(Path("points_finish"))
     clean_data(pff_dfs + adp_dfs + finish_dfs)
-    # adp = pd.concat(adp_dfs, ignore_index=True) OLD
+    adp = pd.concat(adp_dfs, ignore_index=True)
     recieving = pd.concat(pff_dfs, ignore_index=True)
     finish = pd.concat(finish_dfs, ignore_index=True)
-    # merged = pd.merge(
-    #     recieving,
-    #     adp,
-    #     on=["player", "position", "year"],
-    #     how="inner",
-    # )
-    # merged = merged.drop(columns=["Notes", "Id"])
     merged = pd.merge(
         recieving,
+        adp,
+        on=["player", "year", "position"],
+        how="inner",
+    )
+    merged = pd.merge(
+        merged,
         finish[
             [
                 "player",
@@ -122,16 +65,15 @@ def merge_csvs():
         how="inner",
     )
     print("compelte merge")
-    merged.to_csv("merged_new.csv", index=False)
+    merged.to_csv("merged_wr.csv", index=False)
 
 
 def clean_data(dataframes: list[pd.DataFrame]):
     for df in dataframes:
-        print(df)
         df["player"] = df["player"].str.replace(" Jr.", "", regex=False)
         df["player"] = df["player"].str.replace(".", "", regex=False)
-        # non_wr_rows = df.index[df["position"] != "WR"]
-        # df.drop(index=non_wr_rows, inplace=True)
+        non_wr_rows = df.index[~df["position"].isin(["WR", "TE"])]
+        df.drop(index=non_wr_rows, inplace=True)
 
 
 def merge_avg_player(df: pd.DataFrame):
@@ -166,26 +108,6 @@ def merge_avg_player(df: pd.DataFrame):
 
         df[col] = round(weighted_sum / weight_total, 3)
     df.to_csv("average.csv", index=False)
-
-
-def check_data():
-    recieving = pd.read_csv("pff_recieving/receiving_summary_2024.csv")
-    adp = pd.read_csv("preseason_adp/2025ADP.csv")
-    finish = pd.read_csv("points_finish/receiving_finish_2025.csv")
-    merged = pd.read_csv("merged.csv")
-    seen_pff = set()
-    seen_underdog = set()
-    dups = []
-    for row in merged.itertuples():
-        seen_underdog.add(row.player)
-    for row in recieving.itertuples():
-        if row.player in seen_pff:
-            dups.append(row.player)
-        seen_pff.add(row.player)
-    for row in recieving.itertuples():
-        if row.player not in seen_underdog and row.position == "WR":
-            dups.append(row.player)
-    print(dups)
 
 
 def normal_linreg(
@@ -247,7 +169,7 @@ def prepare_data(
     features = X_df.columns.to_list()
     train = merged[merged["year"] < 2024]
     test = merged[merged["year"] == 2024]
-    features = ["avg_adp"]
+    features = ["AVG"]
     X_train = train[features].to_numpy().reshape(-1, len(features))
     X_test = test[features].to_numpy().reshape(-1, len(features))
     y_train = train["fantasyPts"].to_numpy().reshape(-1, 1)
