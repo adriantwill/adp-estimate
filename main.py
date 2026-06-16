@@ -1,11 +1,9 @@
 from pathlib import Path
 import re
-from numpy.random import rand
 import pandas as pd
 from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
 import numpy as np
-from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.linear_model import LinearRegression 
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import add_dummy_feature
 
@@ -23,22 +21,28 @@ def csv_df_list(path: Path) -> list:
             case "pff_recieving":
                 max_targets = df["targets"].max()
                 df = df[df["targets"] >= max_targets * 0.1]
+            case "pff_passing":
+                max_attempts = df["attempts"].max()
+                df = df[df["attempts"] >= max_attempts * 0.1]
             case "pros_bb_adp":
                 df = df[["year", "Player", "AVG", "POS"]]
                 df = df.rename(columns={"POS": "position"})
                 df["position"] = df["position"].str.replace(r"\d+", "", regex=True)
                 df = df.rename(columns={"Player": "player"})
                 df["year"] = int(year) - 1
-            case "points_finish":
+            case "recieving_finish":
                 df["year"] = int(year) - 1
+            case "passing_finish":
+                df["year"] = int(year) - 1
+                df["position"] = "QB"
         dfs.append(df)
     return dfs
 
 
-def merge_csvs():
+def merge_wr_csvs():
     pff_dfs = csv_df_list(Path("pff_recieving"))
     adp_dfs = csv_df_list(Path("pros_bb_adp"))
-    finish_dfs = csv_df_list(Path("points_finish"))
+    finish_dfs = csv_df_list(Path("recieving_finish"))
     clean_data(pff_dfs + adp_dfs + finish_dfs)
     adp = pd.concat(adp_dfs, ignore_index=True)
     recieving = pd.concat(pff_dfs, ignore_index=True)
@@ -68,12 +72,52 @@ def merge_csvs():
     merged.to_csv("merged_wr.csv", index=False)
 
 
+def merge_qb_csvs():
+    pff_dfs = csv_df_list(Path("pff_passing"))
+    adp_dfs = csv_df_list(Path("pros_bb_adp"))
+    finish_dfs = csv_df_list(Path("passing_finish"))
+    qb_clean(pff_dfs + adp_dfs + finish_dfs)
+    adp = pd.concat(adp_dfs, ignore_index=True)
+    passing = pd.concat(pff_dfs, ignore_index=True)
+    finish = pd.concat(finish_dfs, ignore_index=True)
+    merged = pd.merge(
+        passing,
+        adp,
+        on=["player", "year", "position"],
+        how="inner",
+    )
+    merged = pd.merge(
+        merged,
+        finish[
+            [
+                "player",
+                "position",
+                "year",
+                "fantasyPts",
+                "ptsPerDb",
+            ]
+        ],
+        on=["player", "position", "year"],
+        how="inner",
+    )
+    print("compelte merge")
+    merged.to_csv("merged_qb.csv", index=False)
+
+
 def clean_data(dataframes: list[pd.DataFrame]):
     for df in dataframes:
         df["player"] = df["player"].str.replace(" Jr.", "", regex=False)
         df["player"] = df["player"].str.replace(".", "", regex=False)
         non_wr_rows = df.index[~df["position"].isin(["WR", "TE"])]
         df.drop(index=non_wr_rows, inplace=True)
+
+
+def qb_clean(dataframes: list[pd.DataFrame]):
+    for df in dataframes:
+        df["player"] = df["player"].str.replace(" Jr.", "", regex=False)
+        df["player"] = df["player"].str.replace(".", "", regex=False)
+        non_qb_rows = df.index[~df["position"].isin(["QB"])]
+        df.drop(index=non_qb_rows, inplace=True)
 
 
 def merge_avg_player(df: pd.DataFrame):
@@ -141,7 +185,7 @@ def linreg_gd(
 def sklearn_linreg(
     X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
 ):
-    lin_reg = Ridge(alpha=10)
+    lin_reg = LinearRegression()
     lin_reg.fit(X_train, y_train)
     y_pred = lin_reg.predict(X_test)
     mse = mean_squared_error(y_test, y_pred)
@@ -149,8 +193,24 @@ def sklearn_linreg(
     print(rmse)
 
 
+def lin_boost(
+    X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
+):
+    lin1 = LinearRegression()
+    lin1.fit(X_train, y_train)
+    y2_train = y_train - lin1.predict(X_train)
+    df = pd.read_csv("merged_wr.csv")
+    X_train2, X_test2, _, _ = prepare_data(df, True)
+    lin2 = LinearRegression()
+    lin2.fit(X_train2, y2_train)
+    y_pred = lin2.predict(X_test2) + lin1.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    print(rmse)
+
+
 def prepare_data(
-    merged: pd.DataFrame,
+    merged: pd.DataFrame, adp: bool
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     exclude = [
         "player_id",
@@ -169,7 +229,8 @@ def prepare_data(
     features = X_df.columns.to_list()
     train = merged[merged["year"] < 2024]
     test = merged[merged["year"] == 2024]
-    features = ["AVG"]
+    if adp:
+        features = ["AVG"]
     X_train = train[features].to_numpy().reshape(-1, len(features))
     X_test = test[features].to_numpy().reshape(-1, len(features))
     y_train = train["fantasyPts"].to_numpy().reshape(-1, 1)
@@ -178,16 +239,9 @@ def prepare_data(
 
 
 def main():
-    df = pd.read_csv("merged_new_test.csv")
-    X_train, X_test, y_train, y_test = prepare_data(df)
-    sklearn_linreg(X_train, X_test, y_train, y_test)
-    return
-    # merged = pd.read_csv("average.csv")
-    # # merge_avg_player(pd.read_csv("merged_new.csv"))
-    # X_train, X_test, y_train, y_test = prepare_data(merged)
-    # sklearn_linreg(X_train, X_test, y_train, y_test)
-    # plt.plot(X, y, "b.")
-    # plt.show()
+    df = pd.read_csv("merged_wr.csv")
+    X_train, X_test, y_train, y_test = prepare_data(df, False)
+    lin_boost(X_train, X_test, y_train, y_test)
 
 
 if __name__ == "__main__":
