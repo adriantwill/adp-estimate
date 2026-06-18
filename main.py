@@ -1,10 +1,10 @@
-from pathlib import Path
 import re
-import pandas as pd
-from sklearn.metrics import mean_squared_error
+from pathlib import Path
+
 import numpy as np
-from sklearn.linear_model import LinearRegression 
-import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import add_dummy_feature
 
 
@@ -20,7 +20,7 @@ def csv_df_list(path: Path) -> list:
         match str(path):
             case "pff_recieving":
                 max_targets = df["targets"].max()
-                df = df[df["targets"] >= max_targets * 0.1]
+                df = df[df["targets"] >= max_targets * 0.10]
             case "pff_passing":
                 max_attempts = df["attempts"].max()
                 df = df[df["attempts"] >= max_attempts * 0.1]
@@ -200,7 +200,7 @@ def lin_boost(
     lin1.fit(X_train, y_train)
     y2_train = y_train - lin1.predict(X_train)
     df = pd.read_csv("merged_wr.csv")
-    X_train2, X_test2, _, _ = prepare_data(df, True)
+    X_train2, X_test2, _, _ = prepare_data(df, False)
     lin2 = LinearRegression()
     lin2.fit(X_train2, y2_train)
     y_pred = lin2.predict(X_test2) + lin1.predict(X_test)
@@ -229,6 +229,7 @@ def prepare_data(
     features = X_df.columns.to_list()
     train = merged[merged["year"] < 2024]
     test = merged[merged["year"] == 2024]
+    test = test[test["AVG"] <= 150]
     if adp:
         features = ["AVG"]
     X_train = train[features].to_numpy().reshape(-1, len(features))
@@ -239,8 +240,10 @@ def prepare_data(
 
 
 def main():
+    # merge_wr_csvs()
+    # return
     df = pd.read_csv("merged_wr.csv")
-    X_train, X_test, y_train, y_test = prepare_data(df, False)
+    X_train, X_test, y_train, y_test = prepare_data(df, True)
     lin_boost(X_train, X_test, y_train, y_test)
 
 
