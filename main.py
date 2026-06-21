@@ -7,6 +7,18 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import add_dummy_feature
 
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+PFF_DIR = DATA_DIR / "pff"
+PROS_BB_ADP_DIR = DATA_DIR / "pros_bb_adp"
+PFF_RECEIVING_DIR = PFF_DIR / "pff_recieving"
+PFF_PASSING_DIR = PFF_DIR / "pff_passing"
+RECEIVING_FINISH_DIR = PFF_DIR / "recieving_finish"
+PASSING_FINISH_DIR = PFF_DIR / "passing_finish"
+MERGED_WR_CSV = BASE_DIR / "merged_wr.csv"
+MERGED_QB_CSV = BASE_DIR / "merged_qb.csv"
+AVERAGE_CSV = BASE_DIR / "average.csv"
+
 
 def csv_df_list(path: Path) -> list:
     dfs = []
@@ -17,7 +29,7 @@ def csv_df_list(path: Path) -> list:
         year = re.search(r"\d{4}", file_path.name).group()
         df["year"] = int(year)
         print(str(path))
-        match str(path):
+        match path.name:
             case "pff_recieving":
                 max_targets = df["targets"].max()
                 df = df[df["targets"] >= max_targets * 0.10]
@@ -40,9 +52,9 @@ def csv_df_list(path: Path) -> list:
 
 
 def merge_wr_csvs():
-    pff_dfs = csv_df_list(Path("pff_recieving"))
-    adp_dfs = csv_df_list(Path("pros_bb_adp"))
-    finish_dfs = csv_df_list(Path("recieving_finish"))
+    pff_dfs = csv_df_list(PFF_RECEIVING_DIR)
+    adp_dfs = csv_df_list(PROS_BB_ADP_DIR)
+    finish_dfs = csv_df_list(RECEIVING_FINISH_DIR)
     clean_data(pff_dfs + adp_dfs + finish_dfs)
     adp = pd.concat(adp_dfs, ignore_index=True)
     recieving = pd.concat(pff_dfs, ignore_index=True)
@@ -69,13 +81,13 @@ def merge_wr_csvs():
         how="inner",
     )
     print("compelte merge")
-    merged.to_csv("merged_wr.csv", index=False)
+    merged.to_csv(MERGED_WR_CSV, index=False)
 
 
 def merge_qb_csvs():
-    pff_dfs = csv_df_list(Path("pff_passing"))
-    adp_dfs = csv_df_list(Path("pros_bb_adp"))
-    finish_dfs = csv_df_list(Path("passing_finish"))
+    pff_dfs = csv_df_list(PFF_PASSING_DIR)
+    adp_dfs = csv_df_list(PROS_BB_ADP_DIR)
+    finish_dfs = csv_df_list(PASSING_FINISH_DIR)
     qb_clean(pff_dfs + adp_dfs + finish_dfs)
     adp = pd.concat(adp_dfs, ignore_index=True)
     passing = pd.concat(pff_dfs, ignore_index=True)
@@ -101,14 +113,14 @@ def merge_qb_csvs():
         how="inner",
     )
     print("compelte merge")
-    merged.to_csv("merged_qb.csv", index=False)
+    merged.to_csv(MERGED_QB_CSV, index=False)
 
 
 def clean_data(dataframes: list[pd.DataFrame]):
     for df in dataframes:
         df["player"] = df["player"].str.replace(" Jr.", "", regex=False)
         df["player"] = df["player"].str.replace(".", "", regex=False)
-        non_wr_rows = df.index[~df["position"].isin(["WR", "TE"])]
+        non_wr_rows = df.index[~df["position"].isin(["WR"])]
         df.drop(index=non_wr_rows, inplace=True)
 
 
@@ -151,7 +163,7 @@ def merge_avg_player(df: pd.DataFrame):
         )
 
         df[col] = round(weighted_sum / weight_total, 3)
-    df.to_csv("average.csv", index=False)
+    df.to_csv(AVERAGE_CSV, index=False)
 
 
 def normal_linreg(
@@ -199,7 +211,7 @@ def lin_boost(
     lin1 = LinearRegression()
     lin1.fit(X_train, y_train)
     y2_train = y_train - lin1.predict(X_train)
-    df = pd.read_csv("merged_wr.csv")
+    df = pd.read_csv(MERGED_WR_CSV)
     X_train2, X_test2, _, _ = prepare_data(df, False)
     lin2 = LinearRegression()
     lin2.fit(X_train2, y2_train)
@@ -239,12 +251,23 @@ def prepare_data(
     return X_train, X_test, y_train, y_test
 
 
+def expected_points(df: pd.DataFrame):
+    df.sort_values(["year", "AVG"])
+    df["bucket"] = df.groupby("year").cumcount() // 6
+    expected_points = df.groupby("bucket")["fantasyPts"].mean().to_frame("mean")
+    expected_points["median"] = df.groupby("bucket")["fantasyPts"].median()
+    expected_points["1st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.25)
+    expected_points["3st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.75)
+    print(expected_points)
+
+
 def main():
+    df = pd.read_csv(MERGED_WR_CSV)
+    expected_points(df)
     # merge_wr_csvs()
-    # return
-    df = pd.read_csv("merged_wr.csv")
-    X_train, X_test, y_train, y_test = prepare_data(df, True)
-    lin_boost(X_train, X_test, y_train, y_test)
+    return
+    # X_train, X_test, y_train, y_test = prepare_data(df, True)
+    # lin_boost(X_train, X_test, y_train, y_test)
 
 
 if __name__ == "__main__":

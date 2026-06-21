@@ -32,6 +32,7 @@ def _numeric_flag(df: pd.DataFrame, column: str) -> pd.Series:
 
 
 def filter_offensive_pbp(pbp: pd.DataFrame) -> pd.DataFrame:
+    # Returns filtered offensive plays plus _pass_attempt, _rush_attempt, _offensive_play.
     _require_columns(pbp, ["posteam", "play_type"])
 
     mask = pbp["posteam"].notna() & pbp["play_type"].isin(["pass", "run"])
@@ -84,6 +85,9 @@ def add_pace_seconds_per_play(
 def calculate_team_pbp_stats(
     pbp: pd.DataFrame, group_cols: tuple[str, ...] = DEFAULT_PBP_GROUP_COLS
 ) -> pd.DataFrame:
+    # Returns offensive plays, pass/rush attempts, pass rates, pace, red-zone rates,
+    # EPA, success rates, touchdown rate, red-zone trips, and points per game.
+    # Rush includes qb scrambles
     plays = filter_offensive_pbp(pbp)
     groups = _group_columns(plays, group_cols)
     grouped = plays.groupby(groups, dropna=False)
@@ -229,6 +233,7 @@ def calculate_target_concentration(
     stats_player: pd.DataFrame,
     group_cols: tuple[str, ...] = DEFAULT_PLAYER_GROUP_COLS,
 ) -> pd.DataFrame:
+    # Returns top WR target shares, WR/TE target share, and top-2 WR WOPR share.
     _require_columns(stats_player, ["position"])
     groups = _group_columns(stats_player, group_cols)
     df = stats_player.copy()
@@ -266,6 +271,7 @@ def calculate_ftn_team_scheme_stats(
     ftn_charting: pd.DataFrame,
     group_cols: tuple[str, ...] = DEFAULT_FTN_GROUP_COLS,
 ) -> pd.DataFrame:
+    # Returns FTN play count, scheme rates, average backfield count, and average box count.
     df = ftn_charting.copy()
     if "posteam" not in df.columns and "team" in df.columns:
         df = df.rename(columns={"team": "posteam"})
