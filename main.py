@@ -1,5 +1,6 @@
 import re
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -18,6 +19,7 @@ PASSING_FINISH_DIR = PFF_DIR / "passing_finish"
 MERGED_WR_CSV = BASE_DIR / "merged_wr.csv"
 MERGED_QB_CSV = BASE_DIR / "merged_qb.csv"
 AVERAGE_CSV = BASE_DIR / "average.csv"
+Position = Literal["QB", "RB", "WR", "TE"]
 
 
 def csv_df_list(path: Path) -> list:
@@ -55,7 +57,7 @@ def merge_wr_csvs():
     pff_dfs = csv_df_list(PFF_RECEIVING_DIR)
     adp_dfs = csv_df_list(PROS_BB_ADP_DIR)
     finish_dfs = csv_df_list(RECEIVING_FINISH_DIR)
-    clean_data(pff_dfs + adp_dfs + finish_dfs)
+    clean_data(pff_dfs + adp_dfs + finish_dfs, "WR")
     adp = pd.concat(adp_dfs, ignore_index=True)
     recieving = pd.concat(pff_dfs, ignore_index=True)
     finish = pd.concat(finish_dfs, ignore_index=True)
@@ -80,15 +82,29 @@ def merge_wr_csvs():
         on=["player", "position", "year"],
         how="inner",
     )
+    merged = expected_points(merged)
     print("compelte merge")
     merged.to_csv(MERGED_WR_CSV, index=False)
+
+
+def expected_points(df: pd.DataFrame) -> pd.DataFrame:
+    df.sort_values(["year", "AVG"])
+    df["bucket"] = df.groupby("year").cumcount() // 6
+    expected_points = df.groupby("bucket")["fantasyPts"].mean().to_frame("mean")
+    expected_points["median"] = df.groupby("bucket")["fantasyPts"].median()
+    expected_points["1st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.25)
+    expected_points["3st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.75)
+    df["expected_diff"] = round(
+        (df["fantasyPts"] - df["bucket"].map(expected_points["median"])), 3
+    )
+    return df
 
 
 def merge_qb_csvs():
     pff_dfs = csv_df_list(PFF_PASSING_DIR)
     adp_dfs = csv_df_list(PROS_BB_ADP_DIR)
     finish_dfs = csv_df_list(PASSING_FINISH_DIR)
-    qb_clean(pff_dfs + adp_dfs + finish_dfs)
+    clean_data(pff_dfs + adp_dfs + finish_dfs, "QB")
     adp = pd.concat(adp_dfs, ignore_index=True)
     passing = pd.concat(pff_dfs, ignore_index=True)
     finish = pd.concat(finish_dfs, ignore_index=True)
@@ -116,20 +132,12 @@ def merge_qb_csvs():
     merged.to_csv(MERGED_QB_CSV, index=False)
 
 
-def clean_data(dataframes: list[pd.DataFrame]):
+def clean_data(dataframes: list[pd.DataFrame], pos: Position):
     for df in dataframes:
         df["player"] = df["player"].str.replace(" Jr.", "", regex=False)
         df["player"] = df["player"].str.replace(".", "", regex=False)
-        non_wr_rows = df.index[~df["position"].isin(["WR"])]
-        df.drop(index=non_wr_rows, inplace=True)
-
-
-def qb_clean(dataframes: list[pd.DataFrame]):
-    for df in dataframes:
-        df["player"] = df["player"].str.replace(" Jr.", "", regex=False)
-        df["player"] = df["player"].str.replace(".", "", regex=False)
-        non_qb_rows = df.index[~df["position"].isin(["QB"])]
-        df.drop(index=non_qb_rows, inplace=True)
+        non_pos_rows = df.index[~df["position"].isin([pos])]
+        df.drop(index=non_pos_rows, inplace=True)
 
 
 def merge_avg_player(df: pd.DataFrame):
@@ -251,20 +259,9 @@ def prepare_data(
     return X_train, X_test, y_train, y_test
 
 
-def expected_points(df: pd.DataFrame):
-    df.sort_values(["year", "AVG"])
-    df["bucket"] = df.groupby("year").cumcount() // 6
-    expected_points = df.groupby("bucket")["fantasyPts"].mean().to_frame("mean")
-    expected_points["median"] = df.groupby("bucket")["fantasyPts"].median()
-    expected_points["1st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.25)
-    expected_points["3st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.75)
-    print(expected_points)
-
-
 def main():
     df = pd.read_csv(MERGED_WR_CSV)
-    expected_points(df)
-    # merge_wr_csvs()
+    merge_wr_csvs()
     return
     # X_train, X_test, y_train, y_test = prepare_data(df, True)
     # lin_boost(X_train, X_test, y_train, y_test)
