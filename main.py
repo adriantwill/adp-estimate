@@ -240,6 +240,9 @@ def prepare_data(
         "ptsPerTouch",
         "franchise_id",
         "year",
+        "expected_diff",
+        "avg",
+        "bucket",
     ]
     exclude.extend(
         merged.columns[merged.isna().any()].to_list()
@@ -254,17 +257,17 @@ def prepare_data(
         features = ["AVG"]
     X_train = train[features].to_numpy().reshape(-1, len(features))
     X_test = test[features].to_numpy().reshape(-1, len(features))
-    y_train = train["fantasyPts"].to_numpy().reshape(-1, 1)
-    y_test = test["fantasyPts"].to_numpy().reshape(-1, 1)
+    y_train = train["expected_diff"].to_numpy().reshape(-1, 1)
+    y_test = test["expected_diff"].to_numpy().reshape(-1, 1)
     return X_train, X_test, y_train, y_test
 
 
 def main():
     df = pd.read_csv(MERGED_WR_CSV)
-    merge_wr_csvs()
-    return
-    # X_train, X_test, y_train, y_test = prepare_data(df, True)
-    # lin_boost(X_train, X_test, y_train, y_test)
+    # merge_wr_csvs()
+    # return
+    X_train, X_test, y_train, y_test = prepare_data(df, True)
+    sklearn_linreg(X_train, X_test, y_train, y_test)
 
 
 if __name__ == "__main__":
