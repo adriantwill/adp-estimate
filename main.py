@@ -2,9 +2,10 @@ import re
 from pathlib import Path
 from typing import Literal
 
+import nflreadpy as nfl
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import ElasticNet, LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import add_dummy_feature
 
@@ -18,6 +19,14 @@ RECEIVING_FINISH_DIR = PFF_DIR / "recieving_finish"
 PASSING_FINISH_DIR = PFF_DIR / "passing_finish"
 MERGED_WR_CSV = BASE_DIR / "merged_wr.csv"
 MERGED_QB_CSV = BASE_DIR / "merged_qb.csv"
+TEAM_CODE_MAP = {
+    "BLT": "BAL",
+    "CLV": "CLE",
+    "HST": "HOU",
+    "ARZ": "ARI",
+    "LA": "LAR",
+    "JAX": "JAC",
+}
 AVERAGE_CSV = BASE_DIR / "average.csv"
 Position = Literal["QB", "RB", "WR", "TE"]
 
@@ -83,15 +92,32 @@ def merge_wr_csvs():
         how="inner",
     )
     merged = expected_points(merged)
+    stats = nfl.load_depth_charts(seasons=[season])
+    merged["team_name"] = merged["team_name"].replace(TEAM_CODE_MAP)
+    merged["proj_qb"] = proj_qb_starter(stats, merged["team_name"], merged["year"] + 1)
     print("compelte merge")
     merged.to_csv(MERGED_WR_CSV, index=False)
 
 
+def proj_qb_starter(stats: pd.DataFrame, team: str, season: int):
+    qb = stats[
+        (stats["club_code"] == team)
+        & (stats["position"] == "QB")
+        & (stats["depth_team"] == 1)
+        & (stats["week"] == 1)
+    ]
+    return qb["full_name"]
+
+
 def expected_points(df: pd.DataFrame) -> pd.DataFrame:
-    df.sort_values(["year", "AVG"])
+    df = df.sort_values(["year", "AVG"]).copy()
     df["bucket"] = df.groupby("year").cumcount() // 6
-    expected_points = df.groupby("bucket")["fantasyPts"].mean().to_frame("mean")
-    expected_points["median"] = df.groupby("bucket")["fantasyPts"].median()
+    expected_points = (
+        df[df["year"] < 2024].groupby("bucket")["fantasyPts"].mean().to_frame("mean")
+    )
+    expected_points["median"] = (
+        df[df["year"] < 2024].groupby("bucket")["fantasyPts"].median()
+    )
     expected_points["1st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.25)
     expected_points["3st_q"] = df.groupby("bucket")["fantasyPts"].quantile(0.75)
     df["expected_diff"] = round(
@@ -205,7 +231,7 @@ def linreg_gd(
 def sklearn_linreg(
     X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray
 ):
-    lin_reg = LinearRegression()
+    lin_reg = ElasticNet()
     lin_reg.fit(X_train, y_train)
     y_pred = lin_reg.predict(X_test)
     mse = mean_squared_error(y_test, y_pred)
@@ -241,12 +267,9 @@ def prepare_data(
         "franchise_id",
         "year",
         "expected_diff",
-        "avg",
         "bucket",
+        "grades_pass_block",
     ]
-    exclude.extend(
-        merged.columns[merged.isna().any()].to_list()
-    )  # EDIT this, removes all NAN
     X_df = merged.drop(columns=exclude)
     X_df = X_df.select_dtypes(include="number")
     features = X_df.columns.to_list()
@@ -266,7 +289,7 @@ def main():
     df = pd.read_csv(MERGED_WR_CSV)
     # merge_wr_csvs()
     # return
-    X_train, X_test, y_train, y_test = prepare_data(df, True)
+    X_train, X_test, y_train, y_test = prepare_data(df, False)
     sklearn_linreg(X_train, X_test, y_train, y_test)
 
 
