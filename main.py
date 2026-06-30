@@ -5,6 +5,7 @@ from typing import Literal
 import nflreadpy as nfl
 import numpy as np
 import pandas as pd
+import polars as pl
 from sklearn.linear_model import ElasticNet, LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import add_dummy_feature
@@ -18,6 +19,7 @@ PFF_PASSING_DIR = PFF_DIR / "pff_passing"
 RECEIVING_FINISH_DIR = PFF_DIR / "recieving_finish"
 PASSING_FINISH_DIR = PFF_DIR / "passing_finish"
 MERGED_WR_CSV = BASE_DIR / "merged_wr.csv"
+MERGED_WR_TEST = BASE_DIR / "merged_wr_test.csv"
 MERGED_QB_CSV = BASE_DIR / "merged_qb.csv"
 TEAM_CODE_MAP = {
     "BLT": "BAL",
@@ -28,6 +30,7 @@ TEAM_CODE_MAP = {
     "JAX": "JAC",
 }
 AVERAGE_CSV = BASE_DIR / "average.csv"
+YEARS = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
 Position = Literal["QB", "RB", "WR", "TE"]
 
 
@@ -92,20 +95,25 @@ def merge_wr_csvs():
         how="inner",
     )
     merged = expected_points(merged)
-    stats = nfl.load_depth_charts(seasons=[season])
     merged["team_name"] = merged["team_name"].replace(TEAM_CODE_MAP)
-    merged["proj_qb"] = proj_qb_starter(stats, merged["team_name"], merged["year"] + 1)
+    years = merged["year"].unique().astype(int).tolist()
+    stats = nfl.load_depth_charts(seasons=years)
+    merged["proj_qb"] = merged.apply(proj_qb_starter, axis=1, args=(stats,))
     print("compelte merge")
-    merged.to_csv(MERGED_WR_CSV, index=False)
+    merged.to_csv(MERGED_WR_TEST, index=False)
 
 
-def proj_qb_starter(stats: pd.DataFrame, team: str, season: int):
-    qb = stats[
-        (stats["club_code"] == team)
-        & (stats["position"] == "QB")
-        & (stats["depth_team"] == 1)
-        & (stats["week"] == 1)
-    ]
+def proj_qb_starter(row, stats):
+    stats = stats[row["year"]]
+    team = row["team_name"]
+    qb = stats.filter(
+        (pl.col("club_code") == team)
+        & (pl.col("position") == "QB")
+        & (pl.col("depth_team") == "1")
+        & (pl.col("week") == 1)
+        & (pl.col("season") == row["year"])
+    )
+    print(qb)
     return qb["full_name"]
 
 
@@ -287,8 +295,8 @@ def prepare_data(
 
 def main():
     df = pd.read_csv(MERGED_WR_CSV)
-    # merge_wr_csvs()
-    # return
+    merge_wr_csvs()
+    return
     X_train, X_test, y_train, y_test = prepare_data(df, False)
     sklearn_linreg(X_train, X_test, y_train, y_test)
 
