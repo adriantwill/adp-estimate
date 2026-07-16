@@ -2,15 +2,15 @@ from typing import Tuple
 import nflreadpy as nfl
 import polars as pl
 #remove code below wthis
-import ssl
-import requests
-ssl._create_default_https_context = ssl._create_unverified_context
-requests.packages.urllib3.disable_warnings()
-original_send = requests.Session.send
-def unverified_send(self, request, **kwargs):
-    kwargs['verify'] = False
-    return original_send(self, request, **kwargs)
-requests.Session.send = unverified_send
+# import ssl
+# import requests
+# ssl._create_default_https_context = ssl._create_unverified_context
+# requests.packages.urllib3.disable_warnings()
+# original_send = requests.Session.send
+# def unverified_send(self, request, **kwargs):
+#     kwargs['verify'] = False
+#     return original_send(self, request, **kwargs)
+# requests.Session.send = unverified_send
 #remove code above this
 
 def main():
