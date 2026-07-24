@@ -5,8 +5,12 @@ import polars as pl
 
 
 def main():
-    df = nfl.load_depth_charts(seasons=2024)
-    proj_wr_starter(df, "HOU", 2022)
+    year = 2024
+    depth = nfl.load_depth_charts(seasons=year)
+    stats = nfl.load_player_stats(
+        seasons=year, summary_level="reg+post"
+    )  # maybe just reg
+    proj_wr_starter(depth, stats, "HOU")
 
 
 def player_stats(df: pl.DataFrame) -> Tuple[str, str]:
@@ -28,8 +32,8 @@ def player_stats(df: pl.DataFrame) -> Tuple[str, str]:
     return row
 
 
-def proj_wr_starter(df: pl.DataFrame, team: str, year: int):
-    qb = df.filter(
+def proj_wr_starter(depth: pl.DataFrame, stats: pl.DataFrame, team: str):
+    wr_depth = depth.filter(
         (pl.col("club_code") == team)
         & (pl.col("position") == "WR")
         # | (pl.col("position") == "TE")
@@ -37,13 +41,11 @@ def proj_wr_starter(df: pl.DataFrame, team: str, year: int):
         & (pl.col("week") == 1)
         # & (pl.col("season") == df["year"])
     )
-    stats = nfl.load_player_stats(
-        seasons=year, summary_level="reg+post"
-    )  # maybe just reg
-    qb = qb.rename({"gsis_id": "player_id"})
-    qb = qb.join(stats, on="player_id")
-    print(qb)
-    print(qb.select(["air_yards_share", "target_share", "full_name"]))
+    wr_depth = wr_depth.rename({"gsis_id": "player_id"})
+    wr_depth = wr_depth.unique(subset=["player_id"], keep="first")
+    wr_depth = wr_depth.join(stats, on="player_id")
+    print(wr_depth)
+    print(wr_depth.select(["air_yards_share", "target_share", "full_name"]))
 
 
 if __name__ == "__main__":
