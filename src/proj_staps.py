@@ -65,6 +65,9 @@ def proj_wr_starter(depth: pl.DataFrame, stats: pl.DataFrame, team: str, year: i
         pl.col("player").map_elements(normalize_player_name).alias("normalized_name")
     )
     x_wr_depth = x_wr_depth.join(college_stats, on=["normalized_name"], how="left")
+    x_wr_depth = x_wr_depth.filter(
+        pl.col("team_name").is_not_null() ^ pl.col("recent_team").is_not_null()
+    )
     print(
         x_wr_depth[
             ["player_id", "player_name", "recent_team", "full_name", "team_name"]
