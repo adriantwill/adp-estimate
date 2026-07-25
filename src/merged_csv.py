@@ -15,6 +15,7 @@ from src.path import (
     PROS_BB_ADP_DIR,
     RECEIVING_FINISH_DIR,
 )
+from util import normalize_player_name
 
 TEAM_CODE_MAP = {
     "BLT": "BAL",
@@ -163,13 +164,6 @@ def merge_qb_csvs():
     )
     print("compelte merge")
     merged.to_csv(MERGED_QB_CSV, index=False)
-
-
-def normalize_player_name(name: str) -> str:
-    name = str(name).lower()
-    name = re.sub(r"\b(jr|sr|ii|iii|iv|v)\b\.?", "", name)
-    name = re.sub(r"[^a-z0-9]+", "", name)
-    return name
 
 
 def clean_data(dataframes: list[pd.DataFrame], pos: Position):
