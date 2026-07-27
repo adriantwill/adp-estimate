@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import nflreadpy as nfl
 import polars as pl
 
@@ -7,26 +5,18 @@ from util import normalize_player_name
 
 
 def main():
-    proj_wr_starter("SEA", 2023)
-
-
-def player_stats(df: pl.DataFrame) -> Tuple[str, str]:
-    year = df["season"].item()
-    id = df["player_id"].item()
-    stats = nfl.load_player_stats(
-        seasons=year, summary_level="reg+post"
-    )  # maybe just reg
-    wr = stats.filter(pl.col("player_id") == id)
-    row = (
-        (
-            wr.row(0, named=True)["air_yards_share"],
-            wr.row(0, named=True)["target_share"],
+    for i in range(16):
+        year = 2009 + i
+        schedules = nfl.load_schedules(seasons=year)
+        team_abbreviations = (
+            pl.concat([schedules["home_team"], schedules["away_team"]])
+            .unique()
+            .sort()
+            .to_list()
         )
-        if wr.height > 0
-        else None
-    )
-    print(row)
-    return row
+        for i, abv in enumerate(team_abbreviations):
+            print(year)
+            proj_wr_starter(abv, year, i)
 
 
 def merge_pff_college(df: pl.DataFrame, year: int):
@@ -42,7 +32,7 @@ def merge_pff_college(df: pl.DataFrame, year: int):
     return df
 
 
-def proj_wr_starter(team: str, year: int):
+def proj_wr_starter(team: str, year: int, team_num: int):
     depth = nfl.load_depth_charts(seasons=year)
     output_stats = nfl.load_player_stats(
         seasons=year, summary_level="reg+post"
@@ -67,17 +57,24 @@ def proj_wr_starter(team: str, year: int):
     wr_depth = wr_depth.filter(
         (pl.col("depth_position") == "WR")
         | (pl.col("depth_position") == "TE")
-        | (pl.col("position") == "RB")
+        | (pl.col("depth_position") == "RB")
     )
     wr_depth = wr_depth.join(output_stats, on="gsis_id")
     wr_depth = wr_depth.join(draft_stats, on="gsis_id", how="left")
     wr_depth = wr_depth.join(input_stats, on="gsis_id", how="left")
-    # wr_depth = wr_depth.filter(
-    #     pl.col("recent_team").is_not_null() ^ pl.col("is_rookie") == 1
-    # )
+    wr_depth = wr_depth.filter(
+        (pl.col("target_share_right").is_not_null()) | (pl.col("is_rookie") == 1)
+    )
+    wr_depth = wr_depth.with_columns(
+        pl.when((pl.col("recent_team") != team) | (pl.col("recent_team").is_null()))
+        .then(1)
+        .otherwise(0)
+        .alias("different_team")
+    )
     wr_depth = wr_depth[
         [
-            "full_name",
+            "different_team",
+            "season",
             "pick",
             "is_rookie",
             "target_share",
@@ -86,8 +83,9 @@ def proj_wr_starter(team: str, year: int):
             "target_share_right",
         ]
     ]
+    wr_depth = wr_depth.with_columns(pl.lit(team_num).alias("team_num"))
+    wr_depth = wr_depth.fill_null(strategy="zero")
     print(wr_depth)
-    print(sum(wr_depth["target_share"]))
 
 
 if __name__ == "__main__":
