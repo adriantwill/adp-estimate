@@ -71,6 +71,36 @@ def proj_wr_starter(team: str, year: int, team_num: int):
         .otherwise(0)
         .alias("different_team")
     )
+    context_group = ["club_code", "season"]
+    previous_target_share = pl.col("target_share_right").fill_null(0.0)
+    rookie = pl.col("is_rookie").fill_null(0)
+    newcomer = pl.col("different_team").fill_null(0)
+    wr_depth = wr_depth.with_columns(
+        [
+            (
+                previous_target_share.sum().over(context_group)
+                - previous_target_share
+            ).alias("teammate_previous_target_share_sum"),
+            previous_target_share.sort(descending=True)
+            .get(0)
+            .over(context_group)
+            .alias("team_top_previous_target_share"),
+            previous_target_share.sort(descending=True)
+            .get(1, null_on_oob=True)
+            .over(context_group)
+            .alias("team_second_previous_target_share"),
+            previous_target_share.rank("ordinal", descending=True)
+            .over(context_group)
+            .alias("previous_target_share_rank"),
+            (pl.len().over(context_group) - 1).alias("teammate_count"),
+            (rookie.sum().over(context_group) - rookie).alias(
+                "rookie_teammate_count"
+            ),
+            (newcomer.sum().over(context_group) - newcomer).alias(
+                "newcomer_teammate_count"
+            ),
+        ]
+    )
     wr_depth = wr_depth[
         [
             "different_team",
@@ -81,6 +111,13 @@ def proj_wr_starter(team: str, year: int, team_num: int):
             "racr",
             "receiving_epa",
             "target_share_right",
+            "teammate_previous_target_share_sum",
+            "team_top_previous_target_share",
+            "team_second_previous_target_share",
+            "previous_target_share_rank",
+            "teammate_count",
+            "rookie_teammate_count",
+            "newcomer_teammate_count",
         ]
     ]
     wr_depth = wr_depth.with_columns(pl.lit(team_num).alias("team_num"))
