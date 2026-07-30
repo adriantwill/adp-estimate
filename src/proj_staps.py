@@ -1,6 +1,6 @@
 import nflreadpy as nfl
 import polars as pl
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.linear_model import ElasticNet
 from sklearn.metrics import mean_squared_error
 
 from util import normalize_player_name
@@ -18,7 +18,6 @@ def main():
             .to_list()
         )
         for i, abv in enumerate(team_abbreviations):
-            print(year)
             df = df.vstack(proj_wr_starter(abv, year, i))
     train_targets(df)
 
@@ -121,6 +120,7 @@ def proj_wr_starter(team: str, year: int, team_num: int):
     ]
     wr_depth = wr_depth.with_columns(pl.lit(team_num).alias("team_num"))
     wr_depth = wr_depth.fill_null(strategy="zero")
+    print(wr_depth)
     return wr_depth
 
 
@@ -157,7 +157,7 @@ def train_targets(df: pl.DataFrame):
         "newcomer_teammate_count",
     ]
     y_test = df.filter(pl.col("season") >= 2023)["target_share"]
-    est = HistGradientBoostingRegressor().fit(x_train, y_train)
+    est = ElasticNet().fit(x_train, y_train)
     res = est.predict(x_test)
     err = mean_squared_error(res, y_test)
     print(err)
