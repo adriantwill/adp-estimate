@@ -45,6 +45,7 @@ def prepare_data(
     X_test = test[features].to_numpy().reshape(-1, len(features))
     y_train = train["expected_diff"].to_numpy().reshape(-1, 1)
     y_test = test["expected_diff"].to_numpy().reshape(-1, 1)
+    # remove y_test
     return X_train, X_test, y_train, y_test
 
 
