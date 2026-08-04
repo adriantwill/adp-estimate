@@ -10,6 +10,7 @@ def main():
     df = pl.DataFrame()
     for i in range(16):
         year = 2009 + i
+        print(year)
         schedules = nfl.load_schedules(seasons=year)
         team_abbreviations = (
             pl.concat([schedules["home_team"], schedules["away_team"]])
@@ -120,7 +121,6 @@ def proj_wr_starter(team: str, year: int, team_num: int):
     ]
     wr_depth = wr_depth.with_columns(pl.lit(team_num).alias("team_num"))
     wr_depth = wr_depth.fill_null(strategy="zero")
-    print(wr_depth)
     return wr_depth
 
 
@@ -156,6 +156,7 @@ def train_targets(df: pl.DataFrame):
         "rookie_teammate_count",
         "newcomer_teammate_count",
     ]
+    print(x_train.filter(pl.any_horizontal(pl.all().is_null())))
     y_test = df.filter(pl.col("season") >= 2023)["target_share"]
     est = ElasticNet().fit(x_train, y_train)
     res = est.predict(x_test)
