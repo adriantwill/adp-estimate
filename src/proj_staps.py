@@ -1,6 +1,6 @@
 import nflreadpy as nfl
 import polars as pl
-from sklearn.linear_model import ElasticNet
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_squared_error
 
 from util import normalize_player_name
@@ -10,7 +10,6 @@ def main():
     df = pl.DataFrame()
     for i in range(16):
         year = 2009 + i
-        print(year)
         schedules = nfl.load_schedules(seasons=year)
         team_abbreviations = (
             pl.concat([schedules["home_team"], schedules["away_team"]])
@@ -19,6 +18,7 @@ def main():
             .to_list()
         )
         for i, abv in enumerate(team_abbreviations):
+            print(year)
             df = df.vstack(proj_wr_starter(abv, year, i))
     train_targets(df)
 
@@ -63,7 +63,7 @@ def proj_wr_starter(team: str, year: int, team_num: int):
         | (pl.col("depth_position") == "TE")
         | (pl.col("depth_position") == "RB")
     )
-    wr_depth = wr_depth.join(output_stats, on="gsis_id")
+    wr_depth = wr_depth.join(output_stats, on="gsis_id", how="left")
     wr_depth = wr_depth.join(draft_stats, on="gsis_id", how="left")
     wr_depth = wr_depth.join(input_stats, on="gsis_id", how="left")
     wr_depth = wr_depth.filter(
@@ -120,7 +120,9 @@ def proj_wr_starter(team: str, year: int, team_num: int):
         "newcomer_teammate_count",
     ]
     wr_depth = wr_depth.with_columns(pl.lit(team_num).alias("team_num"))
-    wr_depth = wr_depth.fill_null(strategy="zero")
+    wr_depth = wr_depth.with_columns(
+        pl.exclude("target_share").fill_null(strategy="zero")
+    )
     return wr_depth
 
 
@@ -156,9 +158,8 @@ def train_targets(df: pl.DataFrame):
         "rookie_teammate_count",
         "newcomer_teammate_count",
     ]
-    print(x_train.filter(pl.any_horizontal(pl.all().is_null())))
     y_test = df.filter(pl.col("season") >= 2023)["target_share"]
-    est = ElasticNet().fit(x_train, y_train)
+    est = HistGradientBoostingRegressor().fit(x_train, y_train)
     res = est.predict(x_test)
     err = mean_squared_error(res, y_test)
     print(err)
