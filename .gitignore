@@ -1,6 +1,4 @@
 .venv/
-AGENTS.md
-.agents/
 .DS_Store
 __pycache__/
 *.~lock*
