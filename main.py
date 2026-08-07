@@ -3,7 +3,6 @@ import pandas as pd
 from sklearn.linear_model import ElasticNet
 from sklearn.metrics import mean_squared_error
 
-# add import
 from src.path import MERGED_WR_CSV
 
 
